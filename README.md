@@ -230,11 +230,11 @@ public void test() {
 
 ### 2.1 `Handler`、`Message`、`MessageQueue`以及`Looper`的关系
 
-![image](https://ghihub.com/tianyalu/NeHandlerSample/raw/master/show/handler_messagequeue_looper_relation.png)
+![image](https://github.com/tianyalu/NeHandlerSample/raw/master/show/handler_messagequeue_looper_relation.png)
 
 ### 2.2 `sendMessage`发送消息调用关系
 
-![image](https://ghihub.com/tianyalu/NeHandlerSample/raw/master/show/handler_send_message_invoke_relation.png)
+![image](https://github.com/tianyalu/NeHandlerSample/raw/master/show/handler_send_message_invoke_relation.png)
 
 ```java
 public final boolean sendEmptyMessage(int what);
@@ -284,11 +284,11 @@ private static void handleCallback(Message message) {
 > 4. 每个`Message`最多指定一个`Handler`来处理事件，一个线程可以有多个`handler`，但一个`handler`只能绑定一个线程；
 > 5. `Looper`是属于某一个线程的，一个`Looper`只对应一个`MessageQueue`，判断这个`handleMessage()`方法在哪个线程上运行，就看这个`Handler`的`Looper`对象是在哪个线程，就在对应的线程上执行。
 
-![image](https://ghihub.com/tianyalu/NeHandlerSample/raw/master/show/handler_theory.png)
+![image](https://github.com/tianyalu/NeHandlerSample/raw/master/show/handler_theory.png)
 
 `Handler`流程形象示意图:
 
-![image](https://ghihub.com/tianyalu/NeHandlerSample/raw/master/show/handler_theory_process.png)
+![image](https://github.com/tianyalu/NeHandlerSample/raw/master/show/handler_theory_process.png)
 
 ### 2.5 源码分析后的几个问题
 
