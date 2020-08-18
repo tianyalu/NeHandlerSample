@@ -300,6 +300,8 @@ private static void handleCallback(Message message) {
 
 因为在`Looper.next()`开启死循环的时候，一旦需要等待时或还没有执行到任务的时候，会调用`NDK`里面的`JNI`方法，释放当前时间片，这样就不会引发`ANR`异常了。
 
+具体来说是利用`Linux`的`epoll`+`pipe`机制，使得主线程在阻塞的时候，让出`CPU`资源，同时等待新的消息。当我们对系统进行操作（包括滑动和点击）的时候，系统就会给主线程发送消息，这时候就会唤醒主线程（执行`onCreate`，`onResume`等方法），当处理完这个消息，就会再次进入阻塞状态，这样系统就能做到随时响应用户的操作。
+
 #### 2.5.3 为什么`Handler`构造方法里面的`Looper`不是直接`new`的？
 
 如果在`Handler`构造方法里面`new Looper`，就无法保证`Looper`唯一，只有用`Looper.prepare()`才能保证唯一性，具体可以看`prepare()`方法。
@@ -307,4 +309,189 @@ private static void handleCallback(Message message) {
 #### 2.5.4 `MessageQueue`为什么要放在`Looper`私有构造方法初始化？
 
 因为一个线程只有绑定一个`Looper`，所以在`Looper`构造方法里面初始化就可以保证`mQueue`也是唯一的`Thread`对应一个`Looper`对应一个`mQueue`。
+
+## 三、手写实现
+
+### 3.1 `ActivityThread`
+
+在`Java`测试单元下
+
+```java
+public class ActivityThread {
+    @Test
+    public void main() {
+        //创建全局唯一的，主线程Looper对象，以及MessageQueue消息队列对象
+        Looper.prepare();
+
+        //模拟Activity中创建Handler对象
+        final Handler handler = new Handler() {
+            @Override
+            public void handleMessage(Message msg) {
+                super.handleMessage(msg);
+                System.out.println(msg.obj.toString( ));
+            }
+        };
+        //消费消息，回调方法（接口方法）
+
+        //子线程发送消息
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                Message message = new Message();
+                message.obj = "hello world";
+                handler.sendMessage(message);
+            }
+        }).start();
+
+        //轮询，取出消息
+        Looper.loop();
+    }
+}
+```
+
+### 3.2 `Message`
+
+```java
+//消息对象
+public class Message {
+
+    //标识
+    public int what;
+    //消息内容
+    public Object obj;
+    //Handler对象
+    public Handler target;
+
+    public Message() {
+    }
+
+    public Message(Object obj) {
+        this.obj = obj;
+    }
+
+    //模拟
+    @NonNull
+    @Override
+    public String toString() {
+        return obj.toString();
+    }
+}
+```
+
+### 3.3 `MessageQueue`
+
+```java
+//消息队列
+public class MessageQueue {
+    //阻塞队列
+    BlockingQueue<Message> blockingQueue = new ArrayBlockingQueue<>(50);
+
+    //将Message消息对象存入阻塞队列中
+    public void enqueueMessage(Message message) {
+        try {
+            blockingQueue.put(message);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+
+    //从消息队列中取出消息
+    public Message next() {
+        try {
+            return blockingQueue.take();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+}
+```
+
+### 3.4 `Looper`
+
+```java
+public class Looper {
+
+    static final ThreadLocal<Looper> sThreadLocal = new ThreadLocal<>();
+    public MessageQueue mQueue;
+
+    private Looper() {
+        mQueue = new MessageQueue();
+    }
+
+    public static void prepare() {
+        //主线程只有唯一一个Looper对象
+        if(sThreadLocal.get() != null) {
+            throw new RuntimeException("Only one Looper may be created per thread");
+        }
+
+        //应用启动时，初始化赋值
+        sThreadLocal.set(new Looper());
+
+    }
+
+    public static Looper myLooper() {
+        return sThreadLocal.get();
+    }
+
+    //轮询，提取消息
+    public static void loop() {
+        //从全局ThreadLocalMap中获取唯一Looper对象
+        Looper me = myLooper();
+        //从Looper对象中获取全局唯一消息队列MessageQueue对象
+        final MessageQueue queue = me.mQueue;
+
+        Message resultMessage;
+        //从消息队列中取消息
+        while (true) {
+            Message msg = queue.next();
+
+            if(msg != null && msg.target != null) {
+                msg.target.dispatchMessage(msg);
+            }
+        }
+    }
+}
+```
+
+### 3.5 `Handler`
+
+```java
+public class Handler {
+    private Looper mLooper;
+    private MessageQueue mQueue;
+
+    public Handler() {
+        mLooper = Looper.myLooper();
+        if(mLooper == null) {
+            throw new RuntimeException("Can't create handler inside thread " + Thread.currentThread()
+                + " that has not called Looper.prepare()");
+        }
+        mQueue = mLooper.mQueue;
+    }
+
+    // 给开发者提供的开放API，用于重写和回调监听
+    public void handleMessage(Message msg) {
+
+    }
+
+    public void sendMessage(Message message) {
+        //将消息放入消息队列中
+        enqueueMessage(message);
+
+    }
+
+    private void enqueueMessage(Message message) {
+        //赋值当前handler
+        message.target = this;
+
+        //使用mQueue，将消息放入
+        mQueue.enqueueMessage(message);
+    }
+
+    public void dispatchMessage(Message msg) {
+        handleMessage(msg);
+    }
+}
+```
 
