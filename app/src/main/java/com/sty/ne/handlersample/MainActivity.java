@@ -10,6 +10,7 @@ import android.os.Message;
 import android.os.SystemClock;
 import android.util.Log;
 import android.widget.TextView;
+import android.widget.Toast;
 
 /**
  * 1、Handler内存泄漏测试
@@ -31,6 +32,7 @@ public class MainActivity extends AppCompatActivity {
         }
     });
 
+    //这是谷歌备胎的API，不推荐使用
     private Handler handler2 = new Handler() {
         @Override
         public void handleMessage(@NonNull Message msg) {
@@ -63,12 +65,22 @@ public class MainActivity extends AppCompatActivity {
 //                handler2.sendMessage(message);
 
                 //1、Handler内存泄漏测试(假象)
-                SystemClock.sleep(3000); //销毁Activity
-                message.what = 3;
-                if(handler1 != null) {
-                    handler1.sendMessage(message); //跳转到第二个界面
-                }
+//                SystemClock.sleep(3000); //销毁Activity
+//                message.what = 3;
+//                if(handler1 != null) {
+//                    handler1.sendMessage(message); //跳转到第二个界面
+//                }
 //                handler1.sendMessageDelayed(message, 3000);
+
+                //2、为什么不能在子线程创建Handler
+                //java.lang.RuntimeException: Can't create handler inside thread Thread[Thread-2,5,main] that has not called Looper.prepare()
+//                new Handler();
+
+                //3、textView.setText()只能在主线程执行-->这句话是错误的
+                //SystemClock.sleep(1000);
+                textView.setText("哈哈哈"); //如果没有延时，可能不会报错；因为其执行的速度快于ViewRootImpl.checkThread()方法
+                //java.lang.RuntimeException: Can't toast on a thread that has not called Looper.prepare()
+//                Toast.makeText(MainActivity.this, "哈哈哈-->", Toast.LENGTH_SHORT).show();
             }
         }).start();
     }
